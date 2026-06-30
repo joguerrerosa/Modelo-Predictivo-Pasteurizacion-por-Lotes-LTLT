@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Alertas - Planta Pasteurizadora</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .card-metric { border: none; border-radius: 12px; transition: transform 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .card-metric:hover { transform: translateY(-3px); }
+        .badge-normal { background-color: #198754; }
+        .badge-advertencia { background-color: #ffc107; color: #000; }
+        .badge-critica { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+
+    <div class="container my-5">
+        <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+            <div>
+                <h1 class="fw-bold text-dark">🥛 Panel de Control y Alertas</h1>
+                <p class="text-muted m-0">Monitoreo térmico e hidráulico en tiempo real</p>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-dark px-3 py-2" id="reloj-sistema">00:00:00</span>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0 mb-4 bg-dark text-white p-4" style="border-radius: 12px;">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h5 class="text-uppercase text-warning web-bold small m-0 mb-1" style="font-weight: bold;">🧠 Diagnóstico Predictivo (Machine Learning)</h5>
+                    <h3 class="fw-bold m-0" id="ia-diagnostico">Sincronizando con modelo predictivo...</h3>
+                </div>
+                <div class="col-md-4 text-md-end text-start mt-3 mt-md-0">
+                    <span class="fs-6 opacity-75 d-block">PROBABILIDAD DE FALLA</span>
+                    <h2 class="display-6 fw-bold text-danger m-0" id="ia-riesgo">0.0%</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-5">
+            <div class="col-md-4">
+                <div class="card card-metric bg-success text-white p-3 text-center">
+                    <h6 class="text-uppercase opacity-75 fw-bold">Variables Normales</h6>
+                    <h2 class="display-5 fw-bold" id="resumen-normales">0</h2>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-metric bg-warning text-dark p-3 text-center">
+                    <h6 class="text-uppercase opacity-75 fw-bold">Advertencias Activas</h6>
+                    <h2 class="display-5 fw-bold" id="resumen-advertencias">0</h2>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-metric bg-danger text-white p-3 text-center">
+                    <h6 class="text-uppercase opacity-75 fw-bold">Fallas Críticas</h6>
+                    <h2 class="display-5 fw-bold" id="resumen-criticas">0</h2>
+                </div>
+            </div>
+        </div>
+
+        <h3 class="fw-bold mb-3 text-secondary">📊 Estado de Variables de Proceso</h3>
+        <div class="row g-4 mb-5" id="contenedor-sensores">
+            </div>
+
+        <div class="card shadow-sm border-0 border-radius-12">
+            <div class="card-header bg-white py-3">
+                <h5 class="fw-bold m-0 text-dark">📝 Registro de Últimos Cambios Evaluados</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle m-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Hora de Registro</th>
+                            <th>Variable Mecánica</th>
+                            <th>Lectura Cruda</th>
+                            <th>Estado Asignado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-registro">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function actualizarDashboard() {
+            try {
+                const respuesta = await fetch('/datos');
+                const data = await respuesta.json();
+
+                // 1. Actualizar campos de Inteligencia Artificial
+                document.getElementById('ia-diagnostico').innerText = data.diagnostico_ia;
+                document.getElementById('ia-riesgo').innerText = data.riesgo_falla + "%";
+
+                // 2. Actualizar los contadores superiores (Resumen)
+                document.getElementById('resumen-normales').innerText = data.resumen.normales;
+                document.getElementById('resumen-advertencias').innerText = data.resumen.advertencias;
+                document.getElementById('resumen-criticas').innerText = data.resumen.criticas;
+
+                // 3. Construir tarjetas de sensores en tiempo real
+                const contenedorSensores = document.getElementById('contenedor-sensores');
+                contenedorSensores.innerHTML = ''; 
+
+                const tablaRegistro = document.getElementById('tabla-registro');
+                tablaRegistro.innerHTML = '';
+
+                data.alarmas.forEach(alarma => {
+                    let colorClase = 'success';
+                    let badgeClase = 'badge-normal';
+                    if (alarma.nivel === 'ADVERTENCIA') { colorClase = 'warning'; badgeClase = 'badge-advertencia'; }
+                    if (alarma.nivel === 'CRITICA') { colorClase = 'danger'; badgeClase = 'badge-critica'; }
+
+                    // Inyectar tarjeta del sensor
+                    const tarjetaHtml = `
+                        <div class="col-md-4">
+                            <div class="card h-100 shadow-sm border-start border-${colorClase} border-4 p-4 bg-white" style="border-radius: 10px;">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="text-muted fw-bold text-uppercase small">${alarma.variable}</span>
+                                    <span class="badge ${badgeClase} px-2 py-1 small">${alarma.nivel}</span>
+                                </div>
+                                <h1 class="display-6 fw-bold text-dark my-1">${alarma.valor} <span class="fs-4 text-secondary">${alarma.unidad}</span></h1>
+                                <small class="text-muted">Última actualización: ${alarma.hora}</small>
+                            </div>
+                        </div>
+                    `;
+                    contenedorSensores.innerHTML += tarjetaHtml;
+
+                    // Inyectar fila en la tabla
+                    const filaHtml = `
+                        <tr>
+                            <td class="text-muted font-monospace">${alarma.hora}</td>
+                            <td class="fw-bold text-dark">${alarma.variable}</td>
+                            <td><span class="badge bg-light text-dark fs-6 border">${alarma.valor} ${alarma.unidad}</span></td>
+                            <td><span class="badge ${badgeClase} px-3 py-2">${alarma.nivel}</span></td>
+                        </tr>
+                    `;
+                    tablaRegistro.innerHTML += filaHtml;
+                    
+                    document.getElementById('reloj-sistema').innerText = `Servidor Activo | ${alarma.hora}`;
+                });
+
+            } catch (error) {
+                console.error("Error al enganchar la telemetría de Flask:", error);
+            }
+        }
+
+        // Configurar el temporizador para actualizar dinámicamente cada 1.5 segundos
+        setInterval(actualizarDashboard, 1500);
+        window.onload = actualizarDashboard;
+    </script>
+</body>
+</html>
